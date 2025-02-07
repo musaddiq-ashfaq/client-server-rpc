@@ -45,7 +45,7 @@ project_root/
 ## Installation and Setup
 ### 1. Clone the repository
 ```sh
-git clone <repository_url>
+git clone https://github.com/musaddiq-ashfaq/client-server-rpc
 cd project_root
 ```
 
