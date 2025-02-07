@@ -13,5 +13,8 @@ type MatrixRequest struct {
 
 // MatrixResponse contains the result of the computation or an error message.
 type MatrixResponse struct {
+	Result  []int
+	Rows   int
+	Cols   int
 	Message string
 }
