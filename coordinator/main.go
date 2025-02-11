@@ -1,14 +1,14 @@
 package main
 
 import (
+	ms "coordinator/matrix_service"
 	"log"
 	"net"
 	"net/rpc"
-	ms "coordinator/matrix_service"
 )
 
 func main() {
-	matrixService := new(ms.MatrixService)
+	matrixService := ms.NewMatrixService()
 	err := rpc.Register(matrixService) // Register the service
 	if err != nil {
 		log.Fatalf("Error registering RPC service: %v", err)
