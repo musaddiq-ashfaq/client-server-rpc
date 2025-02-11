@@ -1,9 +1,11 @@
 package matrix_service
 
 import (
-	"errors"
-	"log"
 	client "client/matrix_request"
+	"errors"
+	"fmt"
+	"log"
+	"net/rpc"
 )
 
 // MatrixService defines an RPC service with a Compute method.
@@ -15,6 +17,26 @@ func (m *MatrixService) Compute(req client.MatrixRequest, res *client.MatrixResp
 		return errors.New("invalid matrices")
 	}
 	log.Printf("Received request: Operation=%v, MatrixA=%v, MatrixB=%v\n", req.Operation, req.MatrixA, req.MatrixB)
-	res.Message = "Request received by coordinator"
-	return nil
+
+	// Try to connect to workers from port 50052 to 50060
+	for port := 50052; port <= 50060; port++ {
+		address := fmt.Sprintf("localhost:%d", port)
+		client, err := rpc.Dial("tcp", address)
+		if err != nil {
+			log.Printf("Could not connect to worker at %s: %v", address, err)
+			continue
+		}
+		defer client.Close()
+
+		err = client.Call("WorkerService.Compute", req, res)
+		if err != nil {
+			log.Printf("Error calling Compute on worker at %s: %v", address, err)
+			continue
+		}
+		// Successfully sent the task to a worker
+		log.Printf("Worker at %s returned: Result=%v, Rows=%d, Cols=%d, Message=%s", address, res.Result, res.Rows, res.Cols, res.Message)
+		return nil
+	}
+
+	return errors.New("no available workers to handle the request")
 }

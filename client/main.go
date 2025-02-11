@@ -29,6 +29,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("RPC error: %v", err)
 	}
-
 	fmt.Println("Response from coordinator:", res.Message)
+	fmt.Println("Result:", res.Result)
 }

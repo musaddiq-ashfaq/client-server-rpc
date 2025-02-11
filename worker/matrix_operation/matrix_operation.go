@@ -4,14 +4,14 @@ package matrix_operation
 import (
 	client "client/matrix_request"
 	"errors"
+	"log"
 )
-
-
 
 // PerformMatrixOperation handles matrix operations
 func PerformMatrixOperation(req client.MatrixRequest) (client.MatrixResponse, error) {
 	var result []int
 	var rows, cols int
+	log.Printf("Received request: Operation=%v, MatrixA=%v, MatrixB=%v\n", req.Operation, req.MatrixA, req.MatrixB)
 
 	switch req.Operation {
 	case "add":
