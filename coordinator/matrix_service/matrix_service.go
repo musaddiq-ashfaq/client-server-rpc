@@ -79,9 +79,13 @@ func (m *MatrixService) updateWorkerLoad(address string, delta int) {
 
 // Compute handles matrix operations (for now, it just acknowledges the request).
 func (m *MatrixService) Compute(req client.MatrixRequest, res *client.MatrixResponse) error {
-	if len(req.MatrixA) == 0 || len(req.MatrixB) == 0 {
-		return errors.New("invalid matrices")
+	if req.Operation != "transpose" && (len(req.MatrixA) == 0 || len(req.MatrixB) == 0) {
+		return errors.New("invalid matrices: both MatrixA and MatrixB are required for this operation")
 	}
+	if req.Operation == "transpose" && len(req.MatrixA) == 0 {
+		return errors.New("invalid matrices: MatrixA is required for transpose operation")
+	}
+
 	log.Printf("Received request: Operation=%v, MatrixA=%v, MatrixB=%v\n", req.Operation, req.MatrixA, req.MatrixB)
 
 	for {
@@ -112,3 +116,4 @@ func (m *MatrixService) Compute(req client.MatrixRequest, res *client.MatrixResp
 		return nil
 	}
 }
+
