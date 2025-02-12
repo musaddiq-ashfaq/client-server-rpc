@@ -3,7 +3,7 @@ package matrix_service
 import (
 	client "client/matrix_request"
 	"errors"
-	"fmt"
+	//"fmt"
 	"log"
 	"net/rpc"
 	"sync"
@@ -24,10 +24,10 @@ type MatrixService struct {
 // NewMatrixService initializes a new MatrixService with worker addresses.
 func NewMatrixService() *MatrixService {
 	workers := []WorkerInfo{}
-	for port := 50052; port <= 50060; port++ {
+	/*for port := 50052; port <= 50060; port++ {
 		address := fmt.Sprintf("localhost:%d", port)
 		workers = append(workers, WorkerInfo{Address: address, Load: 0})
-	}
+	}*/
 	return &MatrixService{workers: workers}
 }
 
@@ -62,6 +62,27 @@ func (m *MatrixService) getLeastBusyWorker() (string, error) {
 	}
 
 	return leastBusyWorker.Address, nil
+}
+
+// AddWorker allows a Worker to register itself with the Coordinator.
+func (m *MatrixService) AddWorker(workerAddr string, reply *string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check if the worker is already registered
+	for _, worker := range m.workers {
+		if worker.Address == workerAddr {
+			log.Printf("Worker at %s is already registered.", workerAddr)
+			*reply = "Already registered"
+			return nil
+		}
+	}
+
+	// Add the new Worker
+	m.workers = append(m.workers, WorkerInfo{Address: workerAddr, Load: 0})
+	log.Printf("New Worker registered: %s", workerAddr)
+	*reply = "Worker added successfully"
+	return nil
 }
 
 // updateWorkerLoad updates the load of a worker.
