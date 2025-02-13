@@ -4,7 +4,6 @@ import (
 	ms "coordinator/matrix_service"
 	"crypto/tls"
 	"log"
-	"net"
 	"net/rpc"
 )
 
@@ -16,7 +15,7 @@ func main() {
 	}
 
 	// Load TLS certificate
-	cert, err := tls.LoadX509KeyPair("cert.pem", "key.pem")
+	cert, err := tls.LoadX509KeyPair("../certificates/cert.pem", "../certificates/key.pem")
 	if err != nil {
 		log.Fatalf("Failed to load TLS certificate: %v", err)
 	}
