@@ -3,7 +3,6 @@ package matrix_service
 import (
 	client "client/matrix_request"
 	"errors"
-	//"fmt"
 	"log"
 	"net/rpc"
 	"sync"
@@ -15,7 +14,7 @@ type WorkerInfo struct {
 	Load    int
 }
 
-// MatrixService defines an RPC service with a Compute method.
+// MatrixService defines an RPC service which recieves from client and sends matrix requests to workers
 type MatrixService struct {
 	workers []WorkerInfo
 	mu      sync.Mutex
@@ -24,10 +23,6 @@ type MatrixService struct {
 // NewMatrixService initializes a new MatrixService with worker addresses.
 func NewMatrixService() *MatrixService {
 	workers := []WorkerInfo{}
-	/*for port := 50052; port <= 50060; port++ {
-		address := fmt.Sprintf("localhost:%d", port)
-		workers = append(workers, WorkerInfo{Address: address, Load: 0})
-	}*/
 	return &MatrixService{workers: workers}
 }
 
@@ -98,8 +93,8 @@ func (m *MatrixService) updateWorkerLoad(address string, delta int) {
 	}
 }
 
-// Compute handles matrix operations (for now, it just acknowledges the request).
-func (m *MatrixService) Compute(req client.MatrixRequest, res *client.MatrixResponse) error {
+// Serve handles the incoming MatrixRequest and sends it to the least busy worker.
+func (m *MatrixService) Serve(req client.MatrixRequest, res *client.MatrixResponse) error {
 	if req.Operation != "transpose" && (len(req.MatrixA) == 0 || len(req.MatrixB) == 0) {
 		return errors.New("invalid matrices: both MatrixA and MatrixB are required for this operation")
 	}
@@ -137,4 +132,3 @@ func (m *MatrixService) Compute(req client.MatrixRequest, res *client.MatrixResp
 		return nil
 	}
 }
-

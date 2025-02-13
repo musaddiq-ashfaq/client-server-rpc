@@ -94,7 +94,7 @@ func main() {
 	}
 
 	var res mr.MatrixResponse
-	err = client.Call("MatrixService.Compute", req, &res) // Make an RPC call
+	err = client.Call("MatrixService.Serve", req, &res) // Make an RPC call
 	if err != nil {
 		log.Fatalf("RPC error: %v", err)
 	}

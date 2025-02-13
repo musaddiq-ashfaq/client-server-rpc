@@ -54,12 +54,11 @@ func main() {
 
 	// Start listening for Coordinator requests
 	workerHost := "localhost"
-	
 	listener, err := net.Listen("tcp", workerHost+":0")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
-
+	
 	workerAddr := listener.Addr().String()
 
 	// Register the RPC service
