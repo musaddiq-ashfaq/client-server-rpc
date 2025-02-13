@@ -2,9 +2,10 @@ package main
 
 import (
 	ms "coordinator/matrix_service"
-	"log"
-	"net/rpc"
 	"crypto/tls"
+	"log"
+	"net"
+	"net/rpc"
 )
 
 func main() {
@@ -15,13 +16,13 @@ func main() {
 	}
 
 	// Load TLS certificate
-	cert, err := tls.LoadX509KeyPair("../certificates/server-cert.pem", "../certificates/server-key.pem")
+	cert, err := tls.LoadX509KeyPair("cert.pem", "key.pem")
 	if err != nil {
 		log.Fatalf("Failed to load TLS certificate: %v", err)
 	}
 
 	config := &tls.Config{Certificates: []tls.Certificate{cert}}
-	listener, err := tls.Listen("tcp", ":50051", config) // Listening with TLS on port 50051
+	listener, err := tls.Listen("tcp", ":50051", config) // Listen with TLS
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}

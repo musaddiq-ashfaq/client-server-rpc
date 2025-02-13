@@ -3,11 +3,10 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"os"
 	"log"
 	"net/rpc"
+	"os"
 	"strconv"
 	strings "strings"
 
@@ -56,31 +55,16 @@ func getMatrixInput(rows, cols int) []int {
 	return matrix
 }
 
-// Secure connection with TLS
-func connectWithTLS() *rpc.Client {
-	certPool := x509.NewCertPool()
-	caCert, err := os.ReadFile("../certificates/ca-cert.pem") // Path to CA certificate
-	if err != nil {
-		log.Fatalf("Failed to read CA cert: %v", err)
-	}
-	certPool.AppendCertsFromPEM(caCert)
-
-	tlsConfig := &tls.Config{
-		RootCAs: certPool,
-	}
-
-	conn, err := tls.Dial("tcp", "localhost:50051", tlsConfig)
-	if err != nil {
-		log.Fatalf("Failed to connect with TLS: %v", err)
-	}
-
-	return rpc.NewClient(conn)
-}
-
-
 func main() {
-	client := connectWithTLS()
-	defer client.Close()
+	// Establish a TLS connection
+	config := &tls.Config{InsecureSkipVerify: true}
+	conn, err := tls.Dial("tcp", "localhost:50051", config)
+	if err != nil {
+		log.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	client := rpc.NewClient(conn)
 
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Choose operation (add, multiply, transpose):")
@@ -115,7 +99,7 @@ func main() {
 	}
 
 	var res mr.MatrixResponse
-	err := client.Call("MatrixService.Serve", req, &res) // Make an RPC call
+	err = client.Call("MatrixService.Serve", req, &res)
 	if err != nil {
 		log.Fatalf("RPC error: %v", err)
 	}
