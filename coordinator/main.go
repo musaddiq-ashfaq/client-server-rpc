@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	matrixService := ms.NewMatrixService()
+	matrixService := ms.NewMatrixService(100)
 	err := rpc.Register(matrixService) // Register the service
 	if err != nil {
 		log.Fatalf("Error registering RPC service: %v", err)

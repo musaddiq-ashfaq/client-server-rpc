@@ -1,7 +1,7 @@
 package matrix_service
 
 import (
-	client "client/matrix_request"
+	mr "client/matrix_request"
 	"errors"
 	"log"
 	"net/rpc"
@@ -14,18 +14,108 @@ type WorkerInfo struct {
 	Load    int
 }
 
-// MatrixService defines an RPC service which recieves from client and sends matrix requests to workers
+// Task represents a matrix operation request along with a response channel.
+type Task struct {
+	Req  mr.MatrixRequest
+	Resp chan mr.MatrixResponse
+}
+
+// MatrixService defines an RPC service which receives client requests and delegates them to workers.
 type MatrixService struct {
-	workers []WorkerInfo
-	mu      sync.Mutex
+	workers   []WorkerInfo
+	mu        sync.Mutex
+	taskQueue chan Task
 }
 
-// NewMatrixService initializes a new MatrixService with worker addresses.
-func NewMatrixService() *MatrixService {
-	workers := []WorkerInfo{}
-	return &MatrixService{workers: workers}
+// NewMatrixService initializes a new MatrixService with worker addresses and starts processing tasks.
+func NewMatrixService(queueSize int) *MatrixService {
+	m := &MatrixService{
+		workers:   []WorkerInfo{},
+		taskQueue: make(chan Task, queueSize),
+	}
+
+	// Start a worker goroutine to process tasks
+	go m.processTasks()
+
+	return m
 }
 
+// processTasks continuously consumes tasks from the queue and assigns them to the least busy worker.
+func (m *MatrixService) processTasks() {
+	for task := range m.taskQueue {
+		for {
+			address, err := m.getLeastBusyWorker()
+			if err != nil {
+				log.Printf("Error getting least busy worker: %v", err)
+				task.Resp <- mr.MatrixResponse{Message: "No available workers"}
+				break
+			}
+
+			client, err := rpc.Dial("tcp", address)
+			if err != nil {
+				log.Printf("Could not connect to worker at %s: %v", address, err)
+				m.updateWorkerLoad(address, -1)
+				continue
+			}
+			defer client.Close()
+
+			var res mr.MatrixResponse
+			err = client.Call("WorkerService.Compute", task.Req, &res)
+			m.updateWorkerLoad(address, -1)
+			if err != nil {
+				log.Printf("Error calling Compute on worker at %s: %v", address, err)
+				continue
+			}
+
+			// Send the response back to the original caller
+			task.Resp <- res
+			break
+		}
+	}
+}
+
+// Serve enqueues the request into the task queue for processing.
+func (m *MatrixService) Serve(req mr.MatrixRequest, res *mr.MatrixResponse) error {
+	if req.Operation != "transpose" && (len(req.MatrixA) == 0 || len(req.MatrixB) == 0) {
+		return errors.New("invalid matrices: both MatrixA and MatrixB are required for this operation")
+	}
+	if req.Operation == "transpose" && len(req.MatrixA) == 0 {
+		return errors.New("invalid matrices: MatrixA is required for transpose operation")
+	}
+
+	log.Printf("Received request: Operation=%v, MatrixA=%v, MatrixB=%v\n", req.Operation, req.MatrixA, req.MatrixB)
+
+	// Create a response channel and enqueue the task
+	respChan := make(chan mr.MatrixResponse, 1)
+	m.taskQueue <- Task{Req: req, Resp: respChan}
+
+	// Wait for response
+	*res = <-respChan
+	return nil
+}
+
+// AddWorker allows a Worker to register itself with the Coordinator.
+func (m *MatrixService) AddWorker(workerAddr string, reply *string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check if the worker is already registered
+	for _, worker := range m.workers {
+		if worker.Address == workerAddr {
+			log.Printf("Worker at %s is already registered.", workerAddr)
+			*reply = "Already registered"
+			return nil
+		}
+	}
+
+	// Add the new Worker
+	m.workers = append(m.workers, WorkerInfo{Address: workerAddr, Load: 0})
+	log.Printf("New Worker registered: %s", workerAddr)
+	*reply = "Worker added successfully"
+	return nil
+}
+
+// getLeastBusyWorker selects the worker with the lowest load.
 func (m *MatrixService) getLeastBusyWorker() (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -59,27 +149,6 @@ func (m *MatrixService) getLeastBusyWorker() (string, error) {
 	return leastBusyWorker.Address, nil
 }
 
-// AddWorker allows a Worker to register itself with the Coordinator.
-func (m *MatrixService) AddWorker(workerAddr string, reply *string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Check if the worker is already registered
-	for _, worker := range m.workers {
-		if worker.Address == workerAddr {
-			log.Printf("Worker at %s is already registered.", workerAddr)
-			*reply = "Already registered"
-			return nil
-		}
-	}
-
-	// Add the new Worker
-	m.workers = append(m.workers, WorkerInfo{Address: workerAddr, Load: 0})
-	log.Printf("New Worker registered: %s", workerAddr)
-	*reply = "Worker added successfully"
-	return nil
-}
-
 // updateWorkerLoad updates the load of a worker.
 func (m *MatrixService) updateWorkerLoad(address string, delta int) {
 	m.mu.Lock()
@@ -90,45 +159,5 @@ func (m *MatrixService) updateWorkerLoad(address string, delta int) {
 			m.workers[i].Load += delta
 			break
 		}
-	}
-}
-
-// Serve handles the incoming MatrixRequest and sends it to the least busy worker.
-func (m *MatrixService) Serve(req client.MatrixRequest, res *client.MatrixResponse) error {
-	if req.Operation != "transpose" && (len(req.MatrixA) == 0 || len(req.MatrixB) == 0) {
-		return errors.New("invalid matrices: both MatrixA and MatrixB are required for this operation")
-	}
-	if req.Operation == "transpose" && len(req.MatrixA) == 0 {
-		return errors.New("invalid matrices: MatrixA is required for transpose operation")
-	}
-
-	log.Printf("Received request: Operation=%v, MatrixA=%v, MatrixB=%v\n", req.Operation, req.MatrixA, req.MatrixB)
-
-	for {
-		address, err := m.getLeastBusyWorker()
-		if err != nil {
-			log.Printf("Error getting least busy worker: %v", err)
-			return errors.New("no available workers to handle the request")
-		}
-
-		client, err := rpc.Dial("tcp", address)
-		if err != nil {
-			log.Printf("Could not connect to worker at %s: %v", address, err)
-			m.updateWorkerLoad(address, -1)
-			continue
-		}
-		defer client.Close()
-
-		m.updateWorkerLoad(address, 1)
-		err = client.Call("WorkerService.Compute", req, res)
-		m.updateWorkerLoad(address, -1)
-		if err != nil {
-			log.Printf("Error calling Compute on worker at %s: %v", address, err)
-			continue
-		}
-
-		// Successfully sent the task to a worker
-		log.Printf("Worker at %s returned: Result=%v, Rows=%d, Cols=%d, Message=%s", address, res.Result, res.Rows, res.Cols, res.Message)
-		return nil
 	}
 }
