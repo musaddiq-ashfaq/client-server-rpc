@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"log"
 	"net"
 	"net/rpc"
+	"os"
 	"time"
 
 	client "client/matrix_request"
@@ -27,27 +30,48 @@ func (w *WorkerService) Compute(req client.MatrixRequest, res *client.MatrixResp
 	return nil
 }
 
+// Secure connection with TLS
+func connectWithTLS() *rpc.Client {
+	certPool := x509.NewCertPool()
+	caCert, err := os.ReadFile("../certificates/ca-cert.pem") // Path to CA certificate
+	if err != nil {
+		log.Fatalf("Failed to read CA cert: %v", err)
+	}
+	certPool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := &tls.Config{
+		RootCAs: certPool,
+	}
+
+	conn, err := tls.Dial("tcp", "localhost:50051", tlsConfig)
+	if err != nil {
+		log.Fatalf("Failed to connect with TLS: %v", err)
+	}
+
+	return rpc.NewClient(conn)
+}
+
 // registerWithCoordinator sends this worker's address to the Coordinator.
 func registerWithCoordinator(workerAddr string) {
-	coordinatorAddr := "localhost:50051" // Coordinator's RPC address
+	for {
+		client := connectWithTLS()
+		if client == nil {
+			time.Sleep(3 * time.Second)
+			continue
+		}
 
-	client, err := rpc.Dial("tcp", coordinatorAddr)
-	if err != nil {
-		log.Printf("Failed to connect to coordinator: %v", err)
-		time.Sleep(3 * time.Second)
-		registerWithCoordinator(workerAddr)
-		return
+		var reply string
+		err := client.Call("MatrixService.AddWorker", workerAddr, &reply)
+		client.Close()
+		if err != nil {
+			log.Printf("Failed to register with coordinator: %v", err)
+			time.Sleep(3 * time.Second)
+			continue
+		}
+
+		log.Printf("Successfully registered with coordinator at %s", workerAddr)
+		break
 	}
-	defer client.Close()
-
-	var reply string
-	err = client.Call("MatrixService.AddWorker", workerAddr, &reply)
-	if err != nil {
-		log.Printf("Failed to register with coordinator: %v", err)
-		return
-	}
-
-	log.Printf("Successfully registered with coordinator at %s", coordinatorAddr)
 }
 
 func main() {
@@ -58,7 +82,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
-	
+
 	workerAddr := listener.Addr().String()
 
 	// Register the RPC service
