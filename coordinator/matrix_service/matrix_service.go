@@ -45,6 +45,7 @@ func (m *MatrixService) processTasks() {
 	for task := range m.taskQueue {
 		for {
 			address, err := m.getLeastBusyWorker()
+			m.updateWorkerLoad(address, 1)
 			if err != nil {
 				log.Printf("Error getting least busy worker: %v", err)
 				task.Resp <- mr.MatrixResponse{Message: "No available workers"}
